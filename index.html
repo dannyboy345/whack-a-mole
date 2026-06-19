@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Whack-a-Mole!</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --hole: #0f3460;
+    --mole: #e94560;
+    --mole-dark: #c23152;
+    --gold: #ffd700;
+    --text: #eee;
+    --grass: #2d6a4f;
+    --grass-dark: #1b4332;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100dvh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .container {
+    text-align: center;
+    padding: 1rem;
+    max-width: 500px;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 6vw, 2.8rem);
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    margin-bottom: 0.3rem;
+    letter-spacing: 0.05em;
+  }
+
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.6rem 1rem;
+    background: var(--surface);
+    border-radius: 12px;
+    font-size: clamp(1rem, 3.5vw, 1.3rem);
+    color: var(--text);
+  }
+
+  .score-display { font-weight: 700; }
+  .score-display .label { font-size: 0.7em; opacity: 0.6; display: block; }
+  .score-display .value { font-size: 1.5em; color: var(--gold); }
+
+  .timer-display { font-weight: 700; }
+  .timer-display .label { font-size: 0.7em; opacity: 0.6; display: block; }
+  .timer-display .value { font-size: 1.5em; }
+  .timer-display.urgent .value { color: var(--mole); animation: pulse 0.5s ease-in-out infinite; }
+
+  .combo-popup {
+    position: fixed;
+    pointer-events: none;
+    color: var(--gold);
+    font-weight: 900;
+    font-size: 2.5rem;
+    text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+    animation: comboFloat 1s ease-out forwards;
+    z-index: 100;
+  }
+
+  @keyframes comboFloat {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-80px) scale(1.5); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(8px, 2vw, 16px);
+    padding: clamp(8px, 2vw, 16px);
+    background: var(--surface);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .hole-wrapper {
+    position: relative;
+    aspect-ratio: 1;
+  }
+
+  .hole {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: var(--hole);
+    border-radius: 50% / 60% 60% 20% 20%;
+    box-shadow: inset 0 8px 20px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  .hole::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+  }
+
+  .mole-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .mole {
+    position: absolute;
+    bottom: -60%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    aspect-ratio: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: bottom 0.08s ease-out;
+    z-index: 3;
+  }
+
+  .mole.active {
+    bottom: 15%;
+  }
+
+  .mole-body {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .mole-head {
+    width: 100%;
+    height: 70%;
+    background: var(--mole);
+    border-radius: 50% 50% 40% 40%;
+    position: absolute;
+    bottom: 20%;
+    left: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .mole-eyes {
+    position: absolute;
+    top: 25%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30%;
+  }
+
+  .mole-eye {
+    width: 18%;
+    aspect-ratio: 1;
+    background: white;
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .mole-eye::after {
+    content: '';
+    width: 45%;
+    height: 45%;
+    background: #111;
+    border-radius: 50%;
+    position: absolute;
+    top: 25%;
+    left: 25%;
+  }
+
+  .mole-nose {
+    width: 22%;
+    aspect-ratio: 1;
+    background: var(--mole-dark);
+    border-radius: 50%;
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .mole-mouth {
+    width: 35%;
+    height: 12%;
+    background: var(--mole-dark);
+    border-radius: 0 0 50% 50%;
+    position: absolute;
+    top: 62%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .mole-whacked .mole-head {
+    background: #ff6b6b;
+    animation: squish 0.15s ease-out;
+  }
+
+  .mole-whacked .mole-eye::after {
+    height: 2px;
+    top: 45%;
+    border-radius: 0;
+  }
+
+  @keyframes squish {
+    0% { transform: scaleY(1); }
+    50% { transform: scaleY(0.6) scaleX(1.15); }
+    100% { transform: scaleY(1); }
+  }
+
+  /* Particles */
+  .particle {
+    position: absolute;
+    pointer-events: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: particleBurst 0.5s ease-out forwards;
+    z-index: 10;
+  }
+
+  @keyframes particleBurst {
+    0% { opacity: 1; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
+  }
+
+  /* Screens */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .screen.hidden { display: none; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .btn {
+    font-size: clamp(1.1rem, 4vw, 1.4rem);
+    padding: 0.8em 2em;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    transition: transform 0.1s, box-shadow 0.1s;
+    color: var(--bg);
+    background: var(--gold);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+  }
+
+  .btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.2);
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 3px;
+  }
+
+  .high-score {
+    color: var(--text);
+    opacity: 0.7;
+    font-size: 0.95rem;
+  }
+
+  .high-score span {
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .game-over-score {
+    font-size: 3rem;
+    color: var(--gold);
+    font-weight: 900;
+    text-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+  }
+
+  .game-over-label {
+    color: var(--text);
+    opacity: 0.8;
+    margin-top: -0.5rem;
+  }
+
+  .difficulty-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn-small {
+    font-size: 0.85rem;
+    padding: 0.5em 1.2em;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: none;
+    border: 2px solid transparent;
+  }
+
+  .btn-small.selected {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .grass-border {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--grass) 0px,
+      var(--grass) 8px,
+      var(--grass-dark) 8px,
+      var(--grass-dark) 16px
+    );
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- START SCREEN -->
+  <div id="start-screen" class="screen">
+    <h1>🔨 Whack-a-Mole!</h1>
+    <p style="color:var(--text);opacity:0.7;max-width:300px">Tap the moles as they pop up. Score as many points as you can before time runs out!</p>
+
+    <div style="color:var(--text);opacity:0.7;font-size:0.9rem">Difficulty</div>
+    <div class="difficulty-buttons">
+      <button class="btn btn-small selected" data-diff="easy">🐢 Easy</button>
+      <button class="btn btn-small" data-diff="medium">⚡ Medium</button>
+      <button class="btn btn-small" data-diff="hard">🔥 Hard</button>
+    </div>
+
+    <button class="btn" id="start-btn" style="margin-top:1rem">▶ Start Game</button>
+    <div class="high-score" id="high-score-display"></div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen hidden">
+    <div class="hud">
+      <div class="score-display">
+        <span class="label">SCORE</span>
+        <span class="value" id="score">0</span>
+      </div>
+      <div class="timer-display" id="timer-display">
+        <span class="label">TIME</span>
+        <span class="value" id="timer">30</span>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div id="gameover-screen" class="screen hidden">
+    <h1>⏰ Time's Up!</h1>
+    <div class="game-over-score" id="final-score">0</div>
+    <p class="game-over-label">points</p>
+    <p style="color:var(--text);opacity:0.7;font-size:0.9rem" id="new-high-score-msg"></p>
+    <button class="btn" id="restart-btn">🔄 Play Again</button>
+    <div class="high-score" id="gameover-high-score"></div>
+  </div>
+
+</div>
+
+<div class="grass-border"></div>
+
+<script>
+// ─── Audio (Web Audio API – no external files) ───────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+}
+
+function playBeep(freq, duration, type = 'square', volume = 0.08) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function sfxPop() { playBeep(600, 0.08, 'square', 0.06); }
+function sfxWhack() { playBeep(200, 0.12, 'sawtooth', 0.1); }
+function sfxMiss() { playBeep(100, 0.15, 'triangle', 0.04); }
+function sfxCombo() { playBeep(800, 0.1, 'square', 0.07); setTimeout(() => playBeep(1000, 0.1, 'square', 0.07), 80); }
+function sfxGameOver() {
+  playBeep(300, 0.2, 'triangle', 0.08);
+  setTimeout(() => playBeep(200, 0.3, 'triangle', 0.06), 200);
+  setTimeout(() => playBeep(100, 0.5, 'triangle', 0.05), 400);
+}
+
+// ─── Game State ──────────────────────────────────────────────────
+const DIFFICULTIES = {
+  easy:   { moleUpMs: 1200, moleDownMs: 600, spawnInterval: 1400, maxMoles: 1 },
+  medium: { moleUpMs: 900,  moleDownMs: 500, spawnInterval: 1000, maxMoles: 2 },
+  hard:   { moleUpMs: 650,  moleDownMs: 400, spawnInterval: 700,  maxMoles: 3 },
+};
+
+let difficulty = 'medium';
+let score = 0;
+let combo = 0;
+let timeLeft = 30;
+let gameRunning = false;
+let gameInterval = null;
+let timerInterval = null;
+let moleTimers = [];
+let highScore = parseInt(localStorage.getItem('whackamole_highscore')) || 0;
+
+const GRID_SIZE = 9; // 3x3
+
+// ─── DOM refs ────────────────────────────────────────────────────
+const $startScreen = document.getElementById('start-screen');
+const $gameScreen = document.getElementById('game-screen');
+const $gameoverScreen = document.getElementById('gameover-screen');
+const $grid = document.getElementById('grid');
+const $score = document.getElementById('score');
+const $timer = document.getElementById('timer');
+const $timerDisplay = document.getElementById('timer-display');
+const $finalScore = document.getElementById('final-score');
+const $newHighScoreMsg = document.getElementById('new-high-score-msg');
+const $highScoreDisplay = document.getElementById('high-score-display');
+const $gameoverHighScore = document.getElementById('gameover-high-score');
+
+// ─── Build Grid ──────────────────────────────────────────────────
+function buildGrid() {
+  $grid.innerHTML = '';
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'hole-wrapper';
+    wrapper.dataset.index = i;
+    wrapper.innerHTML = `
+      <div class="hole"></div>
+      <div class="mole-container">
+        <div class="mole" data-index="${i}">
+          <div class="mole-body">
+            <div class="mole-head">
+              <div class="mole-eyes">
+                <div class="mole-eye"></div>
+                <div class="mole-eye"></div>
+              </div>
+              <div class="mole-nose"></div>
+              <div class="mole-mouth"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    $grid.appendChild(wrapper);
+
+    // Click handler on mole
+    const mole = wrapper.querySelector('.mole');
+    mole.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!gameRunning) return;
+      if (!mole.classList.contains('active')) return;
+      whackMole(mole, wrapper);
+    });
+  }
+}
+
+// ─── Whack ───────────────────────────────────────────────────────
+function whackMole(mole, wrapper) {
+  // Deactivate immediately so it can't be whacked twice
+  mole.classList.remove('active');
+
+  combo++;
+  const points = Math.min(combo, 5); // cap combo multiplier at 5x
+  score += points;
+  $score.textContent = score;
+
+  // Visual feedback
+  mole.classList.add('mole-whacked');
+  setTimeout(() => mole.classList.remove('mole-whacked'), 200);
+
+  spawnParticles(wrapper);
+
+  // Combo popup
+  if (combo >= 2) {
+    showComboPopup(wrapper, combo);
+  }
+
+  // SFX
+  if (combo >= 3) sfxCombo();
+  else sfxWhack();
+
+  // Animate score
+  $score.style.transform = 'scale(1.3)';
+  setTimeout(() => $score.style.transform = 'scale(1)', 150);
+}
+
+function showComboPopup(wrapper, count) {
+  const popup = document.createElement('div');
+  popup.className = 'combo-popup';
+  popup.textContent = `${count}x!`;
+  const rect = wrapper.getBoundingClientRect();
+  popup.style.left = rect.left + rect.width / 2 - 20 + 'px';
+  popup.style.top = rect.top + 'px';
+  document.body.appendChild(popup);
+  popup.addEventListener('animationend', () => popup.remove());
+}
+
+function spawnParticles(wrapper) {
+  const mole = wrapper.querySelector('.mole');
+  const rect = mole.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const colors = ['#ffd700', '#ff6b6b', '#ffa500', '#fff'];
+
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.left = cx + 'px';
+    p.style.top = cy + 'px';
+    p.style.setProperty('--dx', (Math.random() - 0.5) * 80 + 'px');
+    p.style.setProperty('--dy', (Math.random() - 0.5) * 80 - 20 + 'px');
+    p.style.animationDuration = (0.3 + Math.random() * 0.3) + 's';
+    document.body.appendChild(p);
+    p.addEventListener('animationend', () => p.remove());
+  }
+}
+
+// ─── Mole Spawning ───────────────────────────────────────────────
+function getActiveMoles() {
+  return $grid.querySelectorAll('.mole.active').length;
+}
+
+function popMole() {
+  if (!gameRunning) return;
+
+  const cfg = DIFFICULTIES[difficulty];
+  if (getActiveMoles() >= cfg.maxMoles) return;
+
+  // Pick a random hole that doesn't already have an active mole
+  const allMoles = $grid.querySelectorAll('.mole');
+  const available = [];
+  allMoles.forEach(m => {
+    if (!m.classList.contains('active')) available.push(m);
+  });
+  if (available.length === 0) return;
+
+  const mole = available[Math.floor(Math.random() * available.length)];
+  mole.classList.add('active');
+  sfxPop();
+
+  // Auto-hide after moleUpMs
+  const hideTimer = setTimeout(() => {
+    if (mole.classList.contains('active')) {
+      mole.classList.remove('active');
+      combo = 0; // reset combo when mole escapes
+    }
+  }, cfg.moleUpMs);
+
+  moleTimers.push(hideTimer);
+}
+
+// ─── Timer ───────────────────────────────────────────────────────
+function updateTimer() {
+  timeLeft--;
+  $timer.textContent = timeLeft;
+
+  if (timeLeft <= 5) {
+    $timerDisplay.classList.add('urgent');
+    playBeep(440, 0.05, 'square', 0.04);
+  }
+
+  if (timeLeft <= 0) {
+    endGame();
+  }
+}
+
+// ─── Game Flow ───────────────────────────────────────────────────
+function startGame() {
+  initAudio();
+
+  score = 0;
+  combo = 0;
+  timeLeft = 30;
+  gameRunning = true;
+  $score.textContent = '0';
+  $timer.textContent = '30';
+  $timerDisplay.classList.remove('urgent');
+
+  $startScreen.classList.add('hidden');
+  $gameoverScreen.classList.add('hidden');
+  $gameScreen.classList.remove('hidden');
+
+  // Clear any lingering mole timers
+  moleTimers.forEach(clearTimeout);
+  moleTimers = [];
+
+  // Reset all moles
+  $grid.querySelectorAll('.mole').forEach(m => {
+    m.classList.remove('active', 'mole-whacked');
+  });
+
+  // Spawn interval
+  const cfg = DIFFICULTIES[difficulty];
+  gameInterval = setInterval(popMole, cfg.spawnInterval);
+
+  // Timer
+  timerInterval = setInterval(updateTimer, 1000);
+
+  // Initial pop after a short delay
+  setTimeout(popMole, 600);
+}
+
+function endGame() {
+  gameRunning = false;
+  clearInterval(gameInterval);
+  clearInterval(timerInterval);
+
+  // Clear all mole timers and hide moles
+  moleTimers.forEach(clearTimeout);
+  moleTimers = [];
+  $grid.querySelectorAll('.mole').forEach(m => m.classList.remove('active', 'mole-whacked'));
+
+  sfxGameOver();
+
+  // Check high score
+  let isNew = false;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('whackamole_highscore', highScore);
+    isNew = true;
+  }
+
+  // Show game over screen
+  $gameScreen.classList.add('hidden');
+  $gameoverScreen.classList.remove('hidden');
+  $finalScore.textContent = score;
+  $newHighScoreMsg.textContent = isNew ? '🎉 New High Score!' : '';
+  $gameoverHighScore.innerHTML = `Best: <span>${highScore}</span>`;
+
+  updateHighScoreDisplay();
+}
+
+function updateHighScoreDisplay() {
+  if (highScore > 0) {
+    $highScoreDisplay.innerHTML = `High Score: <span>${highScore}</span>`;
+  } else {
+    $highScoreDisplay.innerHTML = '';
+  }
+  $gameoverHighScore.innerHTML = `High Score: <span>${highScore}</span>`;
+}
+
+// ─── Difficulty Selection ────────────────────────────────────────
+document.querySelectorAll('[data-diff]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-diff]').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    difficulty = btn.dataset.diff;
+  });
+});
+
+// ─── Buttons ─────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+// ─── Init ────────────────────────────────────────────────────────
+buildGrid();
+updateHighScoreDisplay();
+
+// Background tap anywhere on game area (miss penalty)
+document.addEventListener('pointerdown', (e) => {
+  if (!gameRunning) return;
+  // If tapping grid background (not a mole), reset combo
+  if (e.target.closest('.grid') && !e.target.closest('.mole.active')) {
+    combo = 0;
+  }
+});
+</script>
+</body>
+</html>
